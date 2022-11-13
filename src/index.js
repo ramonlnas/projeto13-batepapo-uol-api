@@ -18,7 +18,7 @@ const messageSchema = joi.object({
 const app = express();
 dotenv.config();
 app.use(cors());
-app.use(express.json);
+app.use(express.json());
 
 const mongoClient = new MongoClient(process.env.MONGO_URI);
 let db;
@@ -29,13 +29,11 @@ try {
 } catch (err) {
   console.log(err);
 }
- 
 
 const time = dayjs().format("HH/mm/ss");
 
 app.post("/participants", async (req, res) => {
-  const name  = req.body
-  console.log(name, "VAI")
+  const name = req.body;
 
   const newParticipant = {
     name,
@@ -51,37 +49,37 @@ app.post("/participants", async (req, res) => {
   };
 
   const validation = nomeSchema.validate(name, { abortEarly: false });
-  console.log(validation, "ALOU")
 
   if (validation.error) {
     const errors = validation.error.details.map((detail) => detail.message);
     return res.status(422).send(errors);
-    
   }
 
   try {
-    const nameExist = await db.collection("participants").findOne({ name: name });
+    const nameExist = await db
+      .collection("participants")
+      .findOne({ name: name });
 
     if (nameExist) {
       return res.status(409).send({ message: "Esse nome já está cadastrado" });
     }
 
-    await db.collection("participants").insertOne(newParticipant);
-    await db.collection("messages").insertOne(newMessage);
+    await db.collection("participants").insertOne({ newParticipant });
+    await db.collection("messages").insertOne({ newMessage });
 
-    res.status(201);
+    res.sendStatus(201);
   } catch (err) {
     console.log(err);
     res.sendStatus(500);
-    
   }
-  
 });
-
 
 app.get("/participants", async (req, res) => {
   try {
-    const allParticipants = await db.collection("participants").find().toArray();
+    const allParticipants = await db
+      .collection("participants")
+      .find()
+      .toArray();
     console.log(allParticipants);
     res.send(allParticipants);
   } catch (err) {
@@ -92,6 +90,7 @@ app.get("/participants", async (req, res) => {
 
 app.post("/messages", async (req, res) => {
   const body = req.body;
+  console.log(body);
   const user = req.headers;
 
   const validation = messageSchema.validate(body, { abortEarly: false });
@@ -102,15 +101,14 @@ app.post("/messages", async (req, res) => {
   }
 
   try {
-    const userExist = db.collection("participants").findOne({name: user}.toArray())
+    const userExist = db.collection("participants").findOne({ name: user });
 
     if (!userExist) {
       return res.sendStatus(422);
     }
-  
-  
+
     await db.collection("messages").insertOne({ ...body, time: time });
-    return res.send(201);
+    return res.sendStatus(201);
   } catch (err) {
     console.log(err);
     return res.sendStatus(422);
@@ -118,24 +116,31 @@ app.post("/messages", async (req, res) => {
 });
 
 app.get("/messages", async (req, res) => {
-  const { limit } = parseInt(req.query);
+  let { limit } = parseInt(req.query);
   const user = req.headers;
 
   try {
-    const allMessages = db.collection("messages").find().toArray();
+    const allMessages = await db.collection("messages").find({}).toArray();
+    const todasMensagens = [];
 
-    const filterMessages = allMessages.filter((mensages) => {
-      mensages.type === "message" ||
-        (mensages.type === "private_message" && mensages.to === user) ||
-        (mensages.type === "private_message") && (mensages.from === user);
-    });
-
-    if (limit) {
-      const limitedMessages = allMessages.slice(0, 101);
-      const reverseMessages = limitedMessages.reverse();
-      res.send(reverseMessages);
+    for (let i = 0; i < allMessages.length; i++) {
+      if (
+        allMessages[i].type === "message" ||
+        (allMessages[i].type === "private_message" && allMessages[i].to === user) ||
+        (allMessages[i].type === "private_message" && allMessages[i].from === user)
+      ) {
+        todasMensagens.push(allMessages[i]);
+      }
     }
-    res.send(filterMessages);
+
+    console.log(todasMensagens, allMessages);
+    if (!limit) {
+      limit = todasMensagens.length;
+    }
+
+    const limitedMessages = todasMensagens.slice(0, limit);
+
+    res.send(limitedMessages);
   } catch (err) {
     console.log(err);
     res.sendStatus(500);
@@ -148,18 +153,16 @@ app.post("/status", async (req, res) => {
   try {
     const userExist = await db
       .collection("participants")
-      .findOne({ name: user })
-      .toArray();
+      .findOne({ name: user });
 
     if (!userExist) {
       return res.sendStatus(404);
     }
 
-    await db.collection("participants").updateOne(
-      { name: user },
-      { $set: { lastStatus: Date.now() } }
-    );
-    res.sendStatus(200);
+    await db
+      .collection("participants")
+      .updateOne({ name: user }, { $set: { lastStatus: Date.now() } });
+    res.status(200).send("OK");
   } catch (err) {
     res.sendStatus(500);
   }

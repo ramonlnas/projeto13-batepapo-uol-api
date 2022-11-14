@@ -34,19 +34,7 @@ const time = dayjs().format("HH/mm/ss");
 
 app.post("/participants", async (req, res) => {
   const name = req.body;
-
-  const newParticipant = {
-    name,
-    lastStatus: Date.now(),
-  };
-
-  const newMessage = {
-    from: name,
-    to: "Todos",
-    text: "entra na sala...",
-    type: "status",
-    time: time,
-  };
+  console.log(name);
 
   const validation = nomeSchema.validate(name, { abortEarly: false });
 
@@ -58,14 +46,22 @@ app.post("/participants", async (req, res) => {
   try {
     const nameExist = await db
       .collection("participants")
-      .findOne({ name: name });
+      .findOne({ name: name.name });
 
     if (nameExist) {
       return res.status(409).send({ message: "Esse nome já está cadastrado" });
     }
 
-    await db.collection("participants").insertOne({ newParticipant });
-    await db.collection("messages").insertOne({ newMessage });
+    await db
+      .collection("participants")
+      .insertOne({ name: name.name, lastStatus: Date.now() });
+    await db.collection("messages").insertOne({
+      from: name.name,
+      to: "Todos",
+      text: "entra na sala...",
+      type: "status",
+      time: time,
+    });
 
     res.sendStatus(201);
   } catch (err) {
@@ -80,7 +76,6 @@ app.get("/participants", async (req, res) => {
       .collection("participants")
       .find()
       .toArray();
-    console.log(allParticipants);
     res.send(allParticipants);
   } catch (err) {
     console.log(err);
@@ -90,8 +85,8 @@ app.get("/participants", async (req, res) => {
 
 app.post("/messages", async (req, res) => {
   const body = req.body;
-  console.log(body);
-  const user = req.headers;
+  const { user } = req.headers;
+  console.log(user);
 
   const validation = messageSchema.validate(body, { abortEarly: false });
 
@@ -107,7 +102,9 @@ app.post("/messages", async (req, res) => {
       return res.sendStatus(422);
     }
 
-    await db.collection("messages").insertOne({ ...body, time: time });
+    await db
+      .collection("messages")
+      .insertOne({ ...body, time: time, from: user });
     return res.sendStatus(201);
   } catch (err) {
     console.log(err);
@@ -116,8 +113,8 @@ app.post("/messages", async (req, res) => {
 });
 
 app.get("/messages", async (req, res) => {
-  let { limit } = parseInt(req.query);
-  const user = req.headers;
+  let  limit  = parseInt(req.query.limit);
+  const { user } = req.headers;
 
   try {
     const allMessages = await db.collection("messages").find({}).toArray();
@@ -126,19 +123,20 @@ app.get("/messages", async (req, res) => {
     for (let i = 0; i < allMessages.length; i++) {
       if (
         allMessages[i].type === "message" ||
-        (allMessages[i].type === "private_message" && allMessages[i].to === user) ||
-        (allMessages[i].type === "private_message" && allMessages[i].from === user)
+        allMessages[i].to === "Todos" ||
+        allMessages[i].from === user ||
+        allMessages[i].to === user
       ) {
         todasMensagens.push(allMessages[i]);
       }
     }
+    //console.log(todasMensagens)
 
-    console.log(todasMensagens, allMessages);
-    if (!limit) {
-      limit = todasMensagens.length;
+    if(!limit) {
+      limit = todasMensagens.length
     }
 
-    const limitedMessages = todasMensagens.slice(0, limit);
+    const limitedMessages = todasMensagens.slice(-limit);
 
     res.send(limitedMessages);
   } catch (err) {
@@ -148,7 +146,7 @@ app.get("/messages", async (req, res) => {
 });
 
 app.post("/status", async (req, res) => {
-  const user = req.headers;
+  const { user } = req.headers;
 
   try {
     const userExist = await db
@@ -162,7 +160,7 @@ app.post("/status", async (req, res) => {
     await db
       .collection("participants")
       .updateOne({ name: user }, { $set: { lastStatus: Date.now() } });
-    res.status(200).send("OK");
+    res.send(200);
   } catch (err) {
     res.sendStatus(500);
   }

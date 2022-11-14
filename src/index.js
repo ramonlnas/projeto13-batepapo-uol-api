@@ -160,7 +160,7 @@ app.post("/status", async (req, res) => {
     await db
       .collection("participants")
       .updateOne({ name: user }, { $set: { lastStatus: Date.now() } });
-    res.send(200);
+    res.sendStatus(200);
   } catch (err) {
     res.sendStatus(500);
   }
